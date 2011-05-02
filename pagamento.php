@@ -410,14 +410,23 @@
       }
       foreach($insere as $v){
         $this->$v = $this->request->createElement($v);
-        $first_name   = $this->request->createElement('first_name',   $dados['primeiro_nome']); 
-        $middle_name  = $this->request->createElement('middle_name',  $dados['meio_nome']);
-        $last_name    = $this->request->createElement('last_name',    $dados['ultimo_nome']);
-        $email        = $this->request->createElement('email',        $dados['email']);
-        $document     = $this->request->createElement('document',     $dados['documento']);
-        $phone_home   = $this->request->createElement('phone_home');
-        $area_cod     = $this->request->createElement('area_code',    $dados['tel_casa']['area']);
-        $phone_number = $this->request->createElement('phone_number', $dados['tel_casa']['numero']);
+        $first_name         = $this->request->createElement('first_name',   $dados['primeiro_nome']); 
+        $middle_name        = $this->request->createElement('middle_name',  $dados['meio_nome']);
+        $last_name          = $this->request->createElement('last_name',    $dados['ultimo_nome']);
+        $email              = $this->request->createElement('email',        $dados['email']);
+        $document           = $this->request->createElement('document',     $dados['documento']);
+        $phone_home         = $this->request->createElement('phone_home');
+        $area_cod           = $this->request->createElement('area_code',    $dados['tel_casa']['area']);
+        $phone_number       = $this->request->createElement('phone_number', $dados['tel_casa']['numero']);
+        
+        $address_street     = $this->request->createElement('address_street',           $dados['rua']);
+        $address_street_nr  = $this->request->createElement('address_street_nr',        $dados['numero']);
+        $additional_data    = $this->request->createElement('address_additional_data',  $dados['complemento']);                    
+        $address_comunity   = $this->request->createElement('address_comunity',         $dados['bairro']);
+        $address_city       = $this->request->createElement('address_city',             $dados['cidade']);
+        $address_state      = $this->request->createElement('address_state',            $dados['estado']);
+        $address_country    = $this->request->createElement('address_country',          $dados['pais']);
+        
         $phone_home->appendChild($area_cod);
         $phone_home->appendChild($phone_number);
         $address_zip  = $this->request->createElement('address_zip',  $dados['cep']);
@@ -428,6 +437,15 @@
         $this->$v->appendChild($email      );
         $this->$v->appendChild($document   );
         $this->$v->appendChild($phone_home );
+        
+        $this->$v->appendChild($address_street);
+        $this->$v->appendChild($address_street_nr);
+        $this->$v->appendChild($additional_data);
+        $this->$v->appendChild($address_comunity);
+        $this->$v->appendChild($address_city);
+        $this->$v->appendChild($address_state);
+        $this->$v->appendChild($address_country);
+        
         $this->$v->appendChild($address_zip);
       }
     }
