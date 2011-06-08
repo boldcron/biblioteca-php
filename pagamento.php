@@ -1,4 +1,69 @@
 <?php
+
+  class moduleCheck {
+    
+    public $Modules;
+      
+    //function parseModules() {
+    function __construct() {
+      ob_start(); // Stop output of the code and hold in buffer
+      phpinfo(INFO_MODULES); // get loaded modules and their respective settings.
+      $data = ob_get_contents(); // Get the buffer contents and store in $data variable
+      ob_end_clean(); // Clear buffer
+      
+      $data = strip_tags($data,'<h2><th><td>'); // Keep only the items in the <h2>,<th> and <td> tags
+       
+      // Use regular expressions to filter out needed data
+      // Replace everything in the <th> tags and put in <info> tags
+      $data = preg_replace('/<th[^>]*>([^<]+)<\/th>/',"<info>\\1</info>",$data);
+       
+      // Replace everything in <td> tags and put in <info> tags
+      $data = preg_replace('/<td[^>]*>([^<]+)<\/td>/',"<info>\\1</info>",$data);
+       
+      // Split the data into an array
+      $vTmp = preg_split('/(<h2>[^<]+<\/h2>)/',$data,-1,PREG_SPLIT_DELIM_CAPTURE);
+      $vModules = array();
+      $count = count($vTmp);
+      for ($i=1;$i<$count; $i+=2) { // Loop through array and add 2 instead of 1
+        
+        if (preg_match('/<h2>([^<]+)<\/h2>/',$vTmp[$i],$vMat)) { // Check to make sure value is a module
+          $moduleName = trim($vMat[1]); // Get the module name 
+          $vTmp2 = explode("\n",$vTmp[$i+1]);
+          foreach ($vTmp2 AS $vOne) {
+            $vPat = '<info>([^<]+)<\/info>'; // Specify the pattern we created above
+            $vPat3 = "/$vPat\s*$vPat\s*$vPat/"; // Pattern for 2 settings (Local and Master values)
+            $vPat2 = "/$vPat\s*$vPat/"; // Pattern for 1 settings
+            if (preg_match($vPat3,$vOne,$vMat)) { // This setting has a Local and Master value
+              $vModules[$moduleName][trim($vMat[1])] = array(trim($vMat[2]),trim($vMat[3]));
+            } elseif (preg_match($vPat2,$vOne,$vMat)) { // This setting only has a value
+              $vModules[$moduleName][trim($vMat[1])] = trim($vMat[2]);
+            }
+          }
+         
+        }
+      }
+      $this->Modules = $vModules; // Store modules in Modules variable
+    }
+      
+    // Quick check if module is loaded
+    // Returns true if loaded, false if not
+    public function isLoaded($moduleName) {
+      if($this->Modules[$moduleName]) { 
+        return true;
+      }
+      return false;
+    } // End function isLoaded
+      
+    // List all php modules installed with no settings
+    public function listModules() {
+      foreach($this->Modules as $moduleName=>$values) { // Loop through modules
+        // $moduleName is the key of $this->Modules, which is also module name
+        $onlyModules[] = $moduleName;
+      }
+      return $onlyModules; // Return array of all module names
+    } // End function listModules();
+  }
+
   /**
     * Classe para integração com o CobreDireto
     *
@@ -64,6 +129,13 @@
     protected $xml;
     
     /**
+      * Funcionando em modo de debug
+      * @var boolean
+      * @access protected
+      */
+    protected $_debug;
+    
+    /**
       * Configuração inicial do CobreDireto
       *
       * Método para configurar todas as informações necessárias
@@ -72,11 +144,10 @@
       * @access private
       **/
     protected function configuraCobreDireto(){
-      $file=dirname(__FILE__).'/CD_config.php';
-      if (!file_exists($file))
-        die('<h1>Arquivo de configura&ccedil;&atilde;o n&atilde;o encontrado</h1>');
-      require_once($file);
-
+      //$file=dirname(__FILE__).'/CD_config.php';
+      //if (!file_exists($file))
+      //  die('<h1>Arquivo de configura&ccedil;&atilde;o n&atilde;o encontrado</h1>');
+      //require_once($file);
       if (!defined('CD_CODLOJA'))
         die('<h1>C&oacute;digo da loja n&atilde;o definido</h1>');
       $this->codloja = CD_CODLOJA;
@@ -96,7 +167,7 @@
 
       $this->request = new DomDocument('1.0','utf8');
     }
-   
+
     /**
       * Função para auxiliar as alterações durante o processo
       *
@@ -134,7 +205,9 @@
           'data'      => $this->request->saveXML(),
         )
       );
-      $this->xml = simplexml_load_string($retorno->doServiceReturn);
+      if ($retorno->doServiceReturn)
+        $retorno = $retorno->doServiceReturn;
+      $this->xml = simplexml_load_string($retorno);
     }
   }
   
@@ -229,11 +302,12 @@
       * Configura toda a instancia para poder se comunicar com o CobreDireto
       * @param string $fileconfig Arquivo com os dados de configuração
       **/
-    public function __construct($codpedido){
+    public function __construct($codpedido, $debug=false){
+      $this->_debug = $debug;
       parent::configuraCobreDireto();
       
       $this->payOrder =  $this->request->createElement('payOrder');
-      
+
       $this->codpedido = $codpedido;
       
       preg_match('@^([[:alnum:]]+)/@i',$_SERVER['SERVER_PROTOCOL'],$matche);
@@ -241,11 +315,37 @@
       $partes = explode('/',$urlHost);$tot = count($partes) - 1;
       $urlHost = str_replace($partes[$tot],'',$urlHost);
       $this->url_recibo   = ((defined('CD_URL_RECIBO')) ? CD_URL_RECIBO  : $urlHost.'recibo.php').'&id='.$this->codpedido;
-      $this->url_erro     = (defined('CD_URL_ERRO'))   ? CD_URL_ERRO    : $urlHost.'erro.php';
-      $this->url_retorno  = (defined('CD_URL_RETORNO'))? CD_URL_RETORNO : $urlHost.'retorno.php';
-      $this->frete        = (defined('CD_FRETE'))      ? CD_FRETE       : 0;
+      $this->url_erro     = (defined('CD_URL_ERRO'))    ? CD_URL_ERRO    : $urlHost.'erro.php';
+      $this->url_retorno  = (defined('CD_URL_RETORNO')) ? CD_URL_RETORNO : $urlHost.'retorno.php';
+      $this->frete        = (defined('CD_FRETE'))       ? CD_FRETE       : 0;
+      if ($this->_debug){
+          print "Inicializando a classe Pg<br />\n";
+          print "Verificando pend&ecirc;ncias<br />\n";
+          self::checkSystem();
+          print "Definindo URL de Recibo para {$this->url_recibo}<br />\n";
+          print "Definindo URL de Erro para {$this->url_erro}<br />\n";
+          print "Definindo URL de Retorno para {$this->url_retorno}<br />\n";
+          print "Definindo Frete para {$this->frete}<br />\n";
+      }
     }
 
+    public function checkSystem() { 
+      $modules = new moduleCheck;
+      if (class_exists('SoapClient'))
+        print "Classe SoapClient encontrada com sucesso.<br />\n";
+      else
+        print "Classe SoapClient não foi encontrada, favor verificar.<br />\n";
+
+      if ($modules->isLoaded('openssl'))
+        print "OpenSSL encontrado.<br />\n";
+      else
+        print "OpenSSL não foi encontrado.<br />\n";
+
+      if (intval(ini_get('allow_url_fopen')))
+        print "Acesso a URL externa liberado.<br />\n";
+      else
+        print "Acesso a URL externa bloqueado.<br />\n";
+    }
 	function frete($valor) { $this->frete = $valor; }
 	function url_recibo($valor) { $this->url_recibo = $valor; }
 	function url_erro($valor) { $this->url_erro = $valor; }
@@ -289,14 +389,14 @@
       * );
       * @param array $dados Array com os produtos
       **/
-    public function adicionar($produtos){
-
+    public function adicionar($produtos)
+    {
       $order_data = $this->request->createElement('order_data');
 
-      $merch_ref  =  $this->request->createElement('merch_ref',$this->codpedido);
+      $merch_ref  =  $this->request->createElement('merch_ref', $this->codpedido);
       $order_data->appendChild($merch_ref);
 
-      $tax_freight  =  $this->request->createElement('tax_freight',$this->frete);
+      $tax_freight  =  $this->request->createElement('tax_freight', $this->frete);
       $order_data->appendChild($tax_freight);
 
       $total = 0;
@@ -321,6 +421,10 @@
         $item->appendChild($descricao);
         $item->appendChild($quantidade);
         $item->appendChild($valor);
+        if ($this->_debug){
+          print "Inserindo produto:";
+          print '<pre>'.print_r($v,true).'</pre><br />\n';
+        }
 
         $prods->appendChild($item);
       }
@@ -410,14 +514,14 @@
       }
       foreach($insere as $v){
         $this->$v = $this->request->createElement($v);
-        $first_name         = $this->request->createElement('first_name',   $dados['primeiro_nome']); 
-        $middle_name        = $this->request->createElement('middle_name',  $dados['meio_nome']);
-        $last_name          = $this->request->createElement('last_name',    $dados['ultimo_nome']);
-        $email              = $this->request->createElement('email',        $dados['email']);
-        $document           = $this->request->createElement('document',     $dados['documento']);
-        $phone_home         = $this->request->createElement('phone_home');
-        $area_cod           = $this->request->createElement('area_code',    $dados['tel_casa']['area']);
-        $phone_number       = $this->request->createElement('phone_number', $dados['tel_casa']['numero']);
+        $first_name   = $this->request->createElement('first_name',   $dados['primeiro_nome']); 
+        $middle_name  = $this->request->createElement('middle_name',  $dados['meio_nome']);
+        $last_name    = $this->request->createElement('last_name',    $dados['ultimo_nome']);
+        $email        = $this->request->createElement('email',        $dados['email']);
+        $document     = $this->request->createElement('document',     $dados['documento']);
+        $phone_home   = $this->request->createElement('phone_home');
+        $area_cod     = $this->request->createElement('area_code',    $dados['tel_casa']['area']);
+        $phone_number = $this->request->createElement('phone_number', $dados['tel_casa']['numero']);
         
         $address_street     = $this->request->createElement('address_street',           $dados['rua']);
         $address_street_nr  = $this->request->createElement('address_street_nr',        $dados['numero']);
@@ -446,7 +550,7 @@
         $this->$v->appendChild($address_state);
         $this->$v->appendChild($address_country);
         
-        $this->$v->appendChild($address_zip);
+        $this->$v->appendChild($address_zip);        
       }
     }
     
@@ -463,10 +567,19 @@
       self::configuraConsumidor();
       $this->request->appendChild($this->payOrder);
       parent::initCobreDireto('payOrder');
-      if ($this->xml->status != 0)
+      if ($this->xml->status != 0){
+        if ($this->_debug){
+          print '<pre>'.print_r($this->xml,true).'</pre>';
+          print '<hr />';
+        }
         die('<strong>Erro:</strong> '.$this->xml->msg);
-      else
-        header('Location: '.$this->xml->bpag_data->url);
+      }
+      else{
+        if ($this->_debug)
+          print "Redirecionar Usuario para: <a href=\"{$this->xml->bpag_data->url}\">{$this->xml->bpag_data->url}</a>";
+        else
+          header('Location: '.$this->xml->bpag_data->url);
+      }
       
     }
 
@@ -508,7 +621,7 @@
       **/
     function __construct(){
       parent::configuraCobreDireto();
-      
+
       $this->merch_ref  = $_POST['merch_ref'];
       $this->id         = $_POST['id'];
       
@@ -524,14 +637,14 @@
       @header('Content-type: text/xml');
       $bell = new DomDocument('1.0','utf8');
       $payOrder = $bell->createElement('payOrder');
-      $status   = $bell->createElement('status',(function_exists(checagem))? checagem($this->merch_ref): '1');
-      $msg      = $bell->createElement('msg',$msg);
+      $status   = $bell->createElement('status',(function_exists('checagem'))? checagem($this->merch_ref): '1');
+      //$msg      = $bell->createElement('msg',$msg);
       $payOrder->appendChild($status);
-      $payOrder->appendChild($msg);
+      //$payOrder->appendChild($msg);
       $bell->appendChild($payOrder);
       echo $bell->saveXML();
     }
-   
+
     /**
       * Método para montar o Probe para o CobreDireto
       *
@@ -550,12 +663,55 @@
       
       $this->request->appendChild($soapProbe);
       parent::initCobreDireto('probe');
-      if (function_exists(capturar)){
+      if (function_exists('capturar')){
          capturar($this->merch_ref,(string) $this->xml->order_data->order->bpag_data->status, array(
           'url' => (string) $this->xml->order_data->order->bpag_data->url, 
           'msg' => $this->msg, 
           'cobredireto_id' => (string) $this->xml->order_data->order->bpag_data->id,
          ));
       }
+    }
+
+    /**
+      * Método mágico de GET
+      *
+      * Na alteração necessário no OpenCart, é necessário as duas váriaveis:
+      * - merch_ref
+      * - id
+      *
+      * @param string O nome da variavel necessária
+      */
+    public function __get ($attr) { 
+        if (in_array($attr, array('merch_ref','id', 'xml')))
+            return $this->$attr;
+    }
+
+    /**
+      * Método mágico de SET
+      *
+      * A alteração do OpenCart necessita alterar o request
+      *
+      * @param string O nome da variável
+      * @param mixed Valor da variável
+      */
+    public function __set($attr, $value) { 
+        if ($attr == 'request')
+            $this->request = $value;
+    }
+    
+    /**
+      * Método mágico de CALL
+      *
+      * A alteração no OpenCart precisa que o método
+      * 'initCobreDireto' seje chamado externamente
+      * com isso, é verificado se é esse método, senão,
+      * é tratado como um método comum.
+      *
+      * @param string O nome do método
+      * @param array array de valores passados para o método
+      */
+    public function __call($method, $params) {
+        if ($method == 'initCobreDireto')
+            parent::initCobreDireto($params[0]);
     }
   }
